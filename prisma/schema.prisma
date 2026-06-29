@@ -1,0 +1,266 @@
+// Prisma Schema para Sistema de Gestão de Eventos ATCM
+// Otimizado para performance e escalabilidade
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums para tipos de stakeholders
+enum StakeholderType {
+  CLIENTE
+  PILOTO
+  FORNECEDOR
+  PATROCINADOR
+  COLABORADOR
+}
+
+// Níveis de acesso
+enum Role {
+  SUPERADMIN
+  ADMIN
+  STAFF
+  FINANCEIRO
+  VALIDADOR_PAGAMENTO
+}
+
+// Status da inscrição
+enum RegistrationStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+  CANCELADO
+}
+
+// Status do evento
+enum EventStatus {
+  RASCUNHO
+  ATIVO
+  ENCERRADO
+  CANCELADO
+}
+
+// Tabela de Stakeholders (Base de dados centralizada)
+model Stakeholder {
+  id                String           @id @default(cuid())
+  nome              String
+  email             String           @unique
+  telefone          String?
+  nif               String?          @unique
+  endereco          String?
+  tipo              StakeholderType
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relações
+  user              User?
+  registrations     Registration[]
+  sponsorships      Sponsorship[]
+  collaborations    Collaboration[]
+  
+  @@index([email])
+  @@index([tipo])
+  @@map("stakeholders")
+}
+
+// Tabela de Usuários (Autenticação e Autorização)
+model User {
+  id                String           @id @default(cuid())
+  stakeholderId     String?          @unique
+  email             String           @unique
+  passwordHash      String
+  role              Role             @default(STAFF)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  lastLogin         DateTime?
+  
+  // Relações
+  stakeholder       Stakeholder?     @relation(fields: [stakeholderId], references: [id])
+  eventsCreated     Event[]          @relation("EventCreator")
+  paymentValidations PaymentValidation[]
+  
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// Tabela de Eventos
+model Event {
+  id                String           @id @default(cuid())
+  titulo            String
+  descricao         String?
+  data              DateTime
+  local             String           @default("ATCM - Maputo")
+  status            EventStatus      @default(RASCUNHO)
+  inscricoesAtivas  Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  createdById       String
+  
+  // Relações
+  createdBy          User             @relation("EventCreator", fields: [createdById], references: [id])
+  categories        EventCategory[]
+  registrations      Registration[]
+  requiredFields     EventRequiredField[]
+  
+  @@index([data])
+  @@index([status])
+  @@index([inscricoesAtivas])
+  @@map("events")
+}
+
+// Categorias do evento (ex: Tração Traseira, Geral)
+model EventCategory {
+  id                String           @id @default(cuid())
+  eventId           String
+  nome              String
+  descricao         String?
+  vagas             Int
+  taxaInscricao     Float
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relações
+  event             Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations     Registration[]
+  
+  @@index([eventId])
+  @@map("event_categories")
+}
+
+// Campos obrigatórios por evento
+model EventRequiredField {
+  id                String           @id @default(cuid())
+  eventId           String
+  fieldName         String
+  fieldLabel        String
+  fieldType         String           // text, number, select, file
+  isRequired        Boolean          @default(true)
+  options           String?          // JSON para selects
+  createdAt         DateTime         @default(now())
+  
+  // Relações
+  event             Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@index([eventId])
+  @@map("event_required_fields")
+}
+
+// Inscrições
+model Registration {
+  id                String           @id @default(cuid())
+  eventId           String
+  stakeholderId     String
+  categoryId        String
+  status            RegistrationStatus @default(PENDENTE)
+  dadosExtra        Json?            // Dados adicionais do formulário
+  motivoRejeicao    String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relações
+  event             Event            @relation(fields: [eventId], references: [id])
+  stakeholder       Stakeholder      @relation(fields: [stakeholderId], references: [id])
+  category          EventCategory    @relation(fields: [categoryId], references: [id])
+  paymentProof      PaymentProof?
+  validation        PaymentValidation?
+  
+  // Índices compostos para performance
+  @@unique([eventId, stakeholderId])
+  @@index([eventId])
+  @@index([stakeholderId])
+  @@index([status])
+  @@index([categoryId])
+  @@map("registrations")
+}
+
+// Comprovativos de pagamento
+model PaymentProof {
+  id                String           @id @default(cuid())
+  registrationId    String           @unique
+  fileName          String
+  fileUrl           String
+  fileSize          Int
+  mimeType          String
+  uploadedAt        DateTime         @default(now())
+  
+  // Relações
+  registration      Registration     @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  
+  @@index([registrationId])
+  @@map("payment_proofs")
+}
+
+// Validação de pagamentos
+model PaymentValidation {
+  id                String           @id @default(cuid())
+  registrationId    String           @unique
+  validatedById     String
+  aprovado          Boolean
+  motivo            String?
+  validatedAt       DateTime         @default(now())
+  
+  // Relações
+  registration      Registration     @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  validatedBy       User             @relation(fields: [validatedById], references: [id])
+  
+  @@index([registrationId])
+  @@index([validatedById])
+  @@map("payment_validations")
+}
+
+// Patrocínios
+model Sponsorship {
+  id                String           @id @default(cuid())
+  stakeholderId     String
+  eventId           String
+  valor             Float
+  tipo              String           // financeiro, material, serviço
+  descricao         String?
+  createdAt         DateTime         @default(now())
+  
+  // Relações
+  stakeholder       Stakeholder      @relation(fields: [stakeholderId], references: [id])
+  
+  @@index([eventId])
+  @@index([stakeholderId])
+  @@map("sponsorships")
+}
+
+// Colaborações
+model Collaboration {
+  id                String           @id @default(cuid())
+  stakeholderId     String
+  eventId           String
+  funcao            String
+  createdAt         DateTime         @default(now())
+  
+  // Relações
+  stakeholder       Stakeholder      @relation(fields: [stakeholderId], references: [id])
+  
+  @@index([eventId])
+  @@index([stakeholderId])
+  @@map("collaborations")
+}
+
+// Logs de notificações
+model NotificationLog {
+  id                String           @id @default(cuid())
+  tipo              String           // EMAIL, SMS, PUSH
+  destinatario      String
+  assunto           String?
+  conteudo          String
+  status            String           // ENVIADO, FALHOU, PENDENTE
+  erro              String?
+  enviadoAt         DateTime         @default(now())
+  
+  @@index([tipo])
+  @@index([status])
+  @@index([enviadoAt])
+  @@map("notification_logs")
+}
