@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     `
 
     // Receita por evento
-    const receitaPorEvento = await prisma.$queryRaw`
+    const receitaPorEvento = await prisma.$queryRaw<Array<any>>`
       SELECT 
         e.id,
         e.titulo as evento,
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     `
 
     // Receita por categoria
-    const receitaPorCategoria = await prisma.$queryRaw`
+    const receitaPorCategoria = await prisma.$queryRaw<Array<any>>`
       SELECT 
         ec.nome as categoria,
         COALESCE(SUM(ec."taxaInscricao"), 0) as receita,
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     `
 
     // Receita mensal (últimos 12 meses)
-    const receitaMensal = await prisma.$queryRaw`
+    const receitaMensal = await prisma.$queryRaw<Array<any>>`
       SELECT 
         DATE_TRUNC('month', r."createdAt") as mes,
         COALESCE(SUM(ec."taxaInscricao"), 0) as receita,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     `
 
     // Taxa de conversão (inscrições vs pagamentos aprovados)
-    const taxaConversao = await prisma.$queryRaw`
+    const taxaConversao = await prisma.$queryRaw<Array<any>>`
       SELECT 
         COUNT(*) as total_inscricoes,
         SUM(CASE WHEN status = 'APROVADO' THEN 1 ELSE 0 END) as aprovadas,
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     `
 
     // Validações pendentes (receita potencial)
-    const validacoesPendentes = await prisma.$queryRaw`
+    const validacoesPendentes = await prisma.$queryRaw<Array<any>>`
       SELECT 
         COUNT(r.id) as pendentes,
         COALESCE(SUM(ec."taxaInscricao"), 0) as receita_pendente

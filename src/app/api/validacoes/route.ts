@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
           category: true,
           stakeholder: true,
           paymentProof: true,
+          validation: true,
         },
       })
 

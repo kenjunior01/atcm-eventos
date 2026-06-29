@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Stakeholders ativos (com inscrições recentes)
-    const stakeholdersAtivos = await prisma.$queryRaw`
+    const stakeholdersAtivos = await prisma.$queryRaw<Array<{ total: number }>>`
       SELECT COUNT(DISTINCT "stakeholderId") as total
       FROM "registrations"
       WHERE "createdAt" >= ${dataInicio}
